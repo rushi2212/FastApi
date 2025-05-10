@@ -5,3 +5,4 @@ uvicorn==0.34.0
 tavily-python==0.7.0
 google-api-python-client==2.94.0   
 python-multipart==0.0.20
+pillow==11.2.1

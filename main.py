@@ -1,15 +1,17 @@
+import googleapiclient.errors
+import googleapiclient.discovery
 import os
 import re
 from typing import List
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+
 from phi.agent import Agent
 from phi.model.google import Gemini
 from phi.tools.tavily import TavilyTools
 from phi.tools.pubmed import PubmedTools
 import tempfile
-
 
 
 # Environment configuration
@@ -25,8 +27,9 @@ app = FastAPI(
 # CORS middleware
 origins = [
     "http://localhost",
-    "https://curehub-01ml.onrender.com",  # React dev server
+    "http://localhost:5173",  # React dev server
     "http://127.0.0.1",
+
     # Add other allowed origins here
 ]
 
@@ -38,11 +41,12 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+
 class MedicalReportImageAnalyzer:
     def __init__(self):
         self.report_agent = self._create_report_agent()
         self.research_agent = self._create_research_agent()
-        
+
     def _create_report_agent(self) -> Agent:
         """Create the primary medical report image analysis agent"""
         return Agent(
@@ -88,7 +92,7 @@ class MedicalReportImageAnalyzer:
    - 🔗 DOI Link
    - 💡 Patient Implications""",
             tools=[PubmedTools(
-                email="siddharthbasale2004@gmail.com",
+                email="rushikesh220703@gmail.com",
                 max_results=3,
             )],
             markdown=True,
@@ -102,22 +106,23 @@ class MedicalReportImageAnalyzer:
             # Save uploaded files to temporary files
             temp_files = []
             image_paths = []
-            
+
             for image_file in image_files:
-                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{image_file.filename.split('.')[-1]}")
+                temp_file = tempfile.NamedTemporaryFile(
+                    delete=False, suffix=f".{image_file.filename.split('.')[-1]}")
                 content = await image_file.read()
                 temp_file.write(content)
                 temp_file.close()
                 temp_files.append(temp_file)
                 image_paths.append(temp_file.name)
-            
+
             # Step 1: Report image analysis
             analysis_task = """Analyze these medical report images with attention to:
 1. Accurate medical interpretation of all values and findings
 2. Marking terms needing research [[RESEARCH:TERM]] 
 3. Using Tavily to find patient-friendly explanations when needed
 4. Creating clear, supportive output"""
-            
+
             medical_report = self.report_agent.run(
                 analysis_task,
                 images=image_paths
@@ -125,7 +130,7 @@ class MedicalReportImageAnalyzer:
 
             # Step 2: Extract research terms
             research_terms = self._extract_research_terms(medical_report)
-            
+
             # Step 3: Conduct targeted research
             research_report = ""
             if research_terms:
@@ -139,14 +144,14 @@ class MedicalReportImageAnalyzer:
                 report=medical_report,
                 research=research_report
             )
-            
+
             # Clean up temporary files
             for temp_file in temp_files:
                 try:
                     os.unlink(temp_file.name)
                 except:
                     pass
-            
+
             return {
                 "status": "success",
                 "analysis": final_report,
@@ -160,7 +165,7 @@ class MedicalReportImageAnalyzer:
                     os.unlink(temp_file.name)
                 except:
                     pass
-                    
+
             return {
                 "status": "error",
                 "message": str(e),
@@ -176,7 +181,7 @@ class MedicalReportImageAnalyzer:
         """Professional report assembly with safety checks"""
         # Remove research markers from patient-facing content
         clean_report = re.sub(r'\[\[RESEARCH:.*?\]\]', '', report)
-        
+
         report_template = f"""
 # 📋 Your Medical Report Analysis
 
@@ -220,37 +225,38 @@ Error details (for support staff):
 {str(error)}
 """
 
+
 # Initialize the analyzer
 analyzer = MedicalReportImageAnalyzer()
+
 
 @app.post("/analyze-reports/")
 async def analyze_reports(files: List[UploadFile] = File(...)):
     """
     Analyze medical report images and provide a patient-friendly explanation
-    
+
     Parameters:
     - files: List of medical report images (blood tests, scans, etc.)
-    
+
     Returns:
     - JSON response with analysis results
     """
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded")
-    
+
     result = await analyzer.analyze(files)
-    
+
     if result["status"] == "error":
         raise HTTPException(status_code=500, detail=result["message"])
-    
+
     return JSONResponse(content=result)
 
 
 # Add these imports at the top with your other imports
-import googleapiclient.discovery
-import googleapiclient.errors
 
 # YouTube API configuration
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+
 
 def _find_medical_videos_internal(query: str, api_key: str) -> str:
     """
@@ -265,7 +271,8 @@ def _find_medical_videos_internal(query: str, api_key: str) -> str:
             "youtube", "v3", developerKey=api_key)
         request = youtube.search().list(
             part="snippet",
-            q=f"{query} medical",  # Adding "medical" to ensure medical relevance
+            # Adding "medical" to ensure medical relevance
+            q=f"{query} medical",
             type="video",
             maxResults=5,
             order="relevance"
@@ -287,30 +294,36 @@ def _find_medical_videos_internal(query: str, api_key: str) -> str:
 
     except googleapiclient.errors.HttpError as e:
         if e.resp.status == 403:
-            raise HTTPException(status_code=429, detail="YouTube API quota exceeded")
+            raise HTTPException(
+                status_code=429, detail="YouTube API quota exceeded")
         elif e.resp.status == 400:
-            raise HTTPException(status_code=400, detail="Invalid YouTube API request")
+            raise HTTPException(
+                status_code=400, detail="Invalid YouTube API request")
         else:
-            raise HTTPException(status_code=500, detail=f"YouTube API error ({e.resp.status})")
+            raise HTTPException(
+                status_code=500, detail=f"YouTube API error ({e.resp.status})")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/search-medical-videos/")
 async def search_medical_videos(query: str):
     """
     Search YouTube for medical educational videos related to a query
-    
+
     Parameters:
     - query: Medical term or symptom to search for
-    
+
     Returns:
     - JSON response with video URLs or error message
     """
     if not YOUTUBE_API_KEY:
-        raise HTTPException(status_code=500, detail="YouTube API key not configured")
-    
+        raise HTTPException(
+            status_code=500, detail="YouTube API key not configured")
+
     try:
-        video_urls = _find_medical_videos_internal(query=query, api_key=YOUTUBE_API_KEY)
+        video_urls = _find_medical_videos_internal(
+            query=query, api_key=YOUTUBE_API_KEY)
         return {
             "status": "success",
             "query": query,
@@ -326,7 +339,7 @@ async def search_medical_videos(query: str):
 class MedicineImageAnalyzer:
     def __init__(self):
         self.agent = self._create_agent()
-        
+
     def _create_agent(self) -> Agent:
         """Initialize and return the AI agent"""
         return Agent(
@@ -398,25 +411,26 @@ Language Guidelines:
         """Analyze medicine image with error handling"""
         try:
             # Save uploaded file to temporary file
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f".{image_file.filename.split('.')[-1]}")
+            temp_file = tempfile.NamedTemporaryFile(
+                delete=False, suffix=f".{image_file.filename.split('.')[-1]}")
             content = await image_file.read()
             temp_file.write(content)
             temp_file.close()
-            
+
             # Run analysis
             analysis = self.agent.run(
                 "Analyze this medicine with safety recommendations and alternatives",
                 images=[temp_file.name]
             ).content
-            
+
             # Clean up temp file
             os.unlink(temp_file.name)
-            
+
             return {
                 "status": "success",
                 "analysis": analysis
             }
-            
+
         except Exception as e:
             # Clean up temp file if error occurs
             if 'temp_file' in locals():
@@ -424,7 +438,7 @@ Language Guidelines:
                     os.unlink(temp_file.name)
                 except:
                     pass
-                    
+
             return {
                 "status": "error",
                 "message": str(e),
@@ -441,29 +455,33 @@ Error details: {str(error)}
 Please try again or contact support.
 """
 
+
 # Initialize the medicine analyzer
 medicine_analyzer = MedicineImageAnalyzer()
+
 
 @app.post("/analyze-medicine/")
 async def analyze_medicine(file: UploadFile = File(...)):
     """
     Analyze a medicine image and provide safety information and alternatives
-    
+
     Parameters:
     - file: Image of medicine (pill bottle, package, etc.)
-    
+
     Returns:
     - JSON response with analysis results
     """
     if not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail="Uploaded file must be an image")
-    
+        raise HTTPException(
+            status_code=400, detail="Uploaded file must be an image")
+
     result = await medicine_analyzer.analyze(file)
-    
+
     if result["status"] == "error":
         raise HTTPException(status_code=500, detail=result["message"])
-    
+
     return JSONResponse(content=result)
+
 
 @app.get("/health")
 async def health_check():

@@ -27,8 +27,8 @@ app = FastAPI(
 # CORS middleware
 origins = [
     "http://localhost",
+    "https://curehub-bfrb.onrender.com/",
     "http://localhost:5173",  # React dev server
-    "https://curehub-bfrb.onrender.com/"
     "http://127.0.0.1",
 
     # Add other allowed origins here

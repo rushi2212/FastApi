@@ -27,19 +27,19 @@ app = FastAPI(
 # CORS middleware
 origins = [
     "http://localhost",
-    "https://curehub-bfrb.onrender.com/",
+    "https://curehub-bfrb.onrender.com",
     "http://localhost:5173",  # React dev server
     "http://127.0.0.1",
 
     # Add other allowed origins here
 ]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    # Or use ["http://localhost:5000"] to be more specific
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 
